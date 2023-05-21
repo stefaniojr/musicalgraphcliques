@@ -36,7 +36,7 @@ def load_all_lyrics():
     token = 'HpJ0pnH7fP-sc9GodGLYDnXKn6lg7StqlYBZGggTCuP6k0ap9Q4-53_Vo88Rw221'
     # Usando biblioteca Genius, verificar possibilidade de criar sua propria lib
     genius = Genius(token)
-    artist = genius.search_artist("Heather Sommer", max_songs=5, sort="title")
+    artist = genius.search_artist("Aurora", max_songs=5, sort="title")
     print('Carregando musicas...')
     print(artist.songs)
 
@@ -93,5 +93,5 @@ all_lyrics = execute_lemmatization(all_lyrics)
 graph = load_correlation_graph(all_lyrics)
 
 # Visualização do grafo
-nx.draw(graph, with_labels=True)
-plt.savefig('grafo.png')
+nx.draw(graph, with_labels=True, node_size=20, width=0.1, font_size=4)
+plt.savefig('grafo.png', dpi=600)
