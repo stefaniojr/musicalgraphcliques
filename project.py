@@ -9,6 +9,7 @@ from nltk.stem import WordNetLemmatizer
 import community
 import matplotlib.cm as cm
 import numpy as np
+import pandas as pd
 
 
 def load_correlation_graph(words):
@@ -104,7 +105,7 @@ def load_all_lyrics():
     # Usando biblioteca Genius, verificar possibilidade de criar sua propria lib
     genius = Genius(token, excluded_terms=[
                     "Remix", "Live", "Acoustic", "Version", "Vevo", "Intro"], remove_section_headers=True)
-    artist = genius.search_artist("Aurora", max_songs=10    , sort="title")
+    artist = genius.search_artist("Aurora", max_songs=30    , sort="title")
     print('Carregando musicas...')
     print(artist.songs)
 
@@ -180,7 +181,9 @@ def load_louvain_cliques_graph(graph, cliques):
 
 def load_color_map(clique_graph, partition):
     # Criar uma lista de cores
-    colors = ['r', 'g', 'b', 'c', 'm', 'y']
+    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'w', 'orange', 'purple',
+          'brown', 'pink', 'gray', 'olive', 'navy', 'teal', 'salmon',
+          'indigo', 'gold', 'lime']
 
     # Criar um dicionário de cores para os clusters
     color_map = {node: colors[partition[node]]
@@ -230,6 +233,22 @@ def plot_graph_laplacian_spectrum(graph):
     plt.savefig('spectrum.png')
     plt.close()
 
+def export_cliques_report_cvs(cliques):
+    # Criação do dataframe para o relatório
+    cliques_report = pd.DataFrame(columns=['Dimensão', 'Clique'])
+
+    # Preenchimento do dataframe com as informações das cliques
+    for clique in cliques:
+        dimensao = len(clique)
+        cliques_report = cliques_report._append({'Dimensão': dimensao, 'Clique': ', '.join(clique)}, ignore_index=True)
+
+    cliques_report = cliques_report.sort_values(by='Dimensão')
+
+    # Exportar o dataframe para um arquivo CSV
+    cliques_report.to_csv('cliques_report.csv', index=False)
+
+
+
 
 all_lyrics = load_all_lyrics()
 # Aplicar algumas técnicas usadas em NLP
@@ -247,14 +266,17 @@ plt.close()
 cliques = list(nx.find_cliques(graph))
 
 show_cliques_report(cliques)
+export_cliques_report_cvs(cliques)
 
-# Mapear os nós para seus respectivos índices
-node_map = {node: i for i, node in enumerate(graph.nodes())}
+print('graph:')
+print(graph)
 
+node_word_map = {i: word for i, word in enumerate(graph.nodes())}
 # Criar um grafo com as cliques como nós
 clique_graph_lovain = load_louvain_cliques_graph(graph, cliques)
 
-clique_graph = load_clique_graph(graph)
+print('clique_graph_lovain:')
+print(clique_graph_lovain)
 
 # Executar o algoritmo Louvain para clusterização
 partition = community.best_partition(clique_graph_lovain)
@@ -269,29 +291,5 @@ nx.draw_networkx_nodes(clique_graph_lovain, pos, node_color=[
 nx.draw_networkx_edges(clique_graph_lovain, pos, width=0.05)
 nx.draw_networkx_labels(clique_graph_lovain, pos, font_size=1)
 
-plt.savefig('clique_graph_louvain.png', dpi=1400)
-plt.close()
 
-# Plote o grafo com as cliques em cores separadas
-pos = nx.spring_layout(clique_graph)  # Define a posição dos nós no gráfico
-
-# Obtenha o número máximo de cliques
-max_clique_number = max(len(clique) for clique in cliques)
-
-# Obtenha um mapa de cores
-cmap = cm.get_cmap('tab10', max_clique_number + 1)  # Você pode escolher outro mapa de cores se preferir
-
-for node in clique_graph.nodes:
-    clique_number = nx.node_clique_number(clique_graph, node)
-    nx.draw_networkx_nodes(clique_graph, pos,
-                           nodelist=[node],
-                           node_color=cmap(clique_number),
-                           node_size=10,
-                           alpha=0.8)
-
-nx.draw_networkx_edges(clique_graph, pos, width=0.02, alpha=0.5)
-nx.draw_networkx_labels(clique_graph, pos, font_size=1, font_color='black')
-
-plt.savefig('clique_graph.png', dpi=1000)
-plt.close()
-# show_louvain_partition_report(partition)
+show_louvain_partition_report(partition)
