@@ -10,6 +10,8 @@ import community
 import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
+import os
+from PIL import Image
 
 
 def load_correlation_graph(words):
@@ -35,34 +37,7 @@ def load_correlation_graph(words):
 
     return graph
 
-
-def load_louvain_cliques_graph_nodes(cliques):
-    louvain_clique_graph = nx.Graph()
-    louvain_clique_graph.add_nodes_from(range(len(cliques)))
-    return louvain_clique_graph
-
-
-def graph_text_to_graph_index(graph, cliques):
-    # Mapear os nós para seus respectivos índices
-    node_map = {node: i for i, node in enumerate(graph.nodes())}
-
-    # Criar uma lista de cliques mapeados para os seus respectivos índices
-    graph_indexes = [[node_map[node] for node in clique] for clique in cliques]
-
-    return graph_indexes
-
-
-def load_louvain_cliques_graph_edges(graph, louvain_clique_graph, cliques):
-    graph_indexes = graph_text_to_graph_index(graph, cliques)
-    # Adicionar as arestas ao grafo das cliques
-    for i in range(len(cliques)):
-        for j in range(i + 1, len(cliques)):
-            if len(set(graph_indexes[i]) & set(graph_indexes[j])) > 0:
-                louvain_clique_graph.add_edge(i, j)
-    return louvain_clique_graph
-
-
-def load_correlation_graph(words):
+def load_correlation_graph(words, context):
     graph = nx.Graph()
 
     # Percorre todas as palavras
@@ -74,7 +49,6 @@ def load_correlation_graph(words):
             graph.add_node(word)
 
         # Verifique as palavras vizinhas dentro de um contexto definido
-        context = 3  # Quantas palavras antes e depois considerar como vizinhas
         neighbors = words[max(0, i - context):i] + words[i+1:i+context+1]
 
         # Adicione as arestas entre a palavra atual e suas palavras vizinhas
@@ -99,14 +73,13 @@ def show_louvain_partition_report(partition):
         print(f"Setor {setor+1}: {nodes}")
 
 
-def load_all_lyrics():
+def load_all_lyrics(artist, qty_musics):
     # Acesso a API do Genius
     token = 'HpJ0pnH7fP-sc9GodGLYDnXKn6lg7StqlYBZGggTCuP6k0ap9Q4-53_Vo88Rw221'
     # Usando biblioteca Genius, verificar possibilidade de criar sua propria lib
     genius = Genius(token, excluded_terms=[
-                    "Remix", "Live", "Acoustic", "Version", "Vevo", "Intro"], remove_section_headers=True)
-    artist = genius.search_artist("Aurora", max_songs=30    , sort="title")
-    print('Carregando musicas...')
+                    "Remix", "Live", "Acoustic", "Version", "Vevo", "Intro", "Tour", "Speech"], remove_section_headers=True)
+    artist = genius.search_artist(artist, max_songs=qty_musics, sort="title")
     print(artist.songs)
 
     all_lyrics = []
@@ -171,14 +144,6 @@ def show_cliques_report(cliques):
         print(f"Foram encontradas {count} cliques de dimensão K{size}")
 
 
-def load_louvain_cliques_graph(graph, cliques):
-    # Criar um grafo com as cliques como nós
-    louvain_clique_graph = load_louvain_cliques_graph_nodes(cliques)
-    louvain_clique_graph = load_louvain_cliques_graph_edges(graph, louvain_clique_graph, cliques)
-
-    return louvain_clique_graph
-
-
 def load_color_map(clique_graph, partition):
     # Criar uma lista de cores
     colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'w', 'orange', 'purple',
@@ -216,7 +181,7 @@ def load_clique_graph(cliques):
                 
     return clique_graph
 
-def plot_graph_laplacian_spectrum(graph):
+def plot_graph_laplacian_spectrum(graph, folder_path, artist, context):
     # Obtém a matriz Laplaciana do grafo
     laplacian_matrix = nx.laplacian_matrix(graph).toarray()
 
@@ -228,12 +193,14 @@ def plot_graph_laplacian_spectrum(graph):
 
     # Plot dos autovalores
     plt.plot(eigenvalues)
+    plt.title('Espectro da matriz laplaciana do grafo')
+    plt.suptitle(f'Artista: {artist}\nContexto: {context}')
     plt.xlabel('Índice')
     plt.ylabel('Autovalor')
-    plt.savefig('spectrum.png')
+    plt.savefig(os.path.join(folder_path, 'spectrum.png'))
     plt.close()
 
-def export_cliques_report_cvs(cliques):
+def export_cliques_report(cliques, folder_path, artist, context):
     # Criação do dataframe para o relatório
     cliques_report = pd.DataFrame(columns=['Dimensão', 'Clique'])
 
@@ -245,51 +212,95 @@ def export_cliques_report_cvs(cliques):
     cliques_report = cliques_report.sort_values(by='Dimensão')
 
     # Exportar o dataframe para um arquivo CSV
-    cliques_report.to_csv('cliques_report.csv', index=False)
+    cliques_report.to_csv(os.path.join(folder_path, 'cliques_report.csv'), index=False)
 
+    # Plotar histograma das dimensões das cliques
+    plt.hist(cliques_report['Dimensão'], bins=range(min(cliques_report['Dimensão']), max(cliques_report['Dimensão']) + 2, 1), edgecolor='black')
+    plt.xlabel('Dimensão')
+    plt.ylabel('Frequência')
+    plt.title('Histograma das Dimensões das Cliques')
+    plt.suptitle(f'Artista: {artist}\nContexto: {context}')
+    plt.grid(True)
+    plt.savefig(os.path.join(folder_path, f'histograma_cliques.png'))  # Salvar o histograma como uma imagem
+    plt.close()  # Fechar o plot do histograma
 
+def execute(artist, all_lyrics, context):
+    graph = load_correlation_graph(all_lyrics, context)
+    #plot_graph_laplacian_spectrum(graph)
+    artist_name_folder = artist.lower().replace(" ", "_")
+    folder_path = f"reports/{artist_name_folder}/context{context}"
+    os.makedirs(folder_path, exist_ok=True)
 
+    # Visualização do grafo
+    nx.draw(graph, with_labels=True, node_size=20, width=0.1, font_size=4)
+    plt.savefig(os.path.join(folder_path, 'grafo.png'), dpi=600)
+    plt.close()
 
-all_lyrics = load_all_lyrics()
-# Aplicar algumas técnicas usadas em NLP
-all_lyrics = apply_nlp_methods(all_lyrics)
-graph = load_correlation_graph(all_lyrics)
+    plot_graph_laplacian_spectrum(graph, folder_path, artist, context)
 
-plot_graph_laplacian_spectrum(graph)
+    # Cliques
+    cliques = list(nx.find_cliques(graph))
+    show_cliques_report(cliques)
+    export_cliques_report(cliques, folder_path, artist, context)
 
-# Visualização do grafo
-nx.draw(graph, with_labels=True, node_size=20, width=0.1, font_size=4)
-plt.savefig('grafo.png', dpi=600)
-plt.close()
+    # Algoritmo de Louvain
+    #partition = community.best_partition(graph)
 
-# Cliques e algoritmo de Louvian
-cliques = list(nx.find_cliques(graph))
+    #Imprimir resultados
+    #show_louvain_partition_report(partition)
 
-show_cliques_report(cliques)
-export_cliques_report_cvs(cliques)
+def export_geral_histograma_reports(artist):
+    # Criação de uma lista para armazenar as imagens
+    images = []
+    artist_name_folder = artist.lower().replace(" ", "_")
+    # Percorrer cada pasta de artista
+    for artist_folder in os.listdir('.'):
+        if os.path.isdir(artist_folder):
+            # Verificar se o nome da pasta do artista é válido
+            artist_name_folder = os.path.join(artist_folder, f"context{artist_folder[-1]}")
+            if not os.path.isdir(artist_name_folder):
+                continue
+            
+            # Percorrer cada pasta de contexto
+            for context_folder in os.listdir(artist_name_folder):
+                context_path = os.path.join(artist_name_folder, context_folder)
+                image_path = os.path.join(context_path, 'histograma_cliques.png')
 
-print('graph:')
-print(graph)
+                # Verificar se o arquivo existe
+                if os.path.isfile(image_path):
+                    # Abrir a imagem usando a biblioteca Pillow
+                    image = Image.open(image_path)
+                    images.append(image)
 
-node_word_map = {i: word for i, word in enumerate(graph.nodes())}
-# Criar um grafo com as cliques como nós
-clique_graph_lovain = load_louvain_cliques_graph(graph, cliques)
+    # Criar uma imagem única com todas as imagens
+    widths, heights = zip(*(i.size for i in images))
+    total_width = sum(widths)
+    max_height = max(heights)
 
-print('clique_graph_lovain:')
-print(clique_graph_lovain)
+    new_image = Image.new('RGB', (total_width, max_height))
 
-# Executar o algoritmo Louvain para clusterização
-partition = community.best_partition(clique_graph_lovain)
-color_map = load_color_map(clique_graph_lovain, partition)
+    x_offset = 0
+    for image in images:
+        new_image.paste(image, (x_offset, 0))
+        x_offset += image.width
 
-pos = nx.spring_layout(clique_graph_lovain)
-# Plotar os nós
-nx.draw_networkx_nodes(clique_graph_lovain, pos, node_color=[
-                       color_map[node] for node in clique_graph_lovain.nodes()], node_size=2)
+    # Salvar a imagem única
+    new_image.save('geral_histogramas_report.png')
 
-# Plotar as arestas com largura máxima mais fina
-nx.draw_networkx_edges(clique_graph_lovain, pos, width=0.05)
-nx.draw_networkx_labels(clique_graph_lovain, pos, font_size=1)
+# def export_geral_spectrum_reports():
 
+context = 8
+qty_musics = 30
+artists = ['Aurora', 'Taylor Swift', 'Demi Lovato', 'Sia', 'Paramore']
 
-show_louvain_partition_report(partition)
+for artist in artists:
+    print(f'Analisando {artist}...')
+    all_lyrics = []
+    all_lyrics = load_all_lyrics(artist, qty_musics)
+    # Aplicar algumas técnicas usadas em NLP
+    all_lyrics = apply_nlp_methods(all_lyrics)
+    
+    for i in range(1, context + 1):
+        print(f'Coletando dados para o contexto {i}...')
+        execute(artist, all_lyrics, i)
+        export_geral_histograma_reports(artist)
