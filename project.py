@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import os
 from PIL import Image
+import shutil
 
 
 def load_correlation_graph(words):
@@ -78,9 +79,23 @@ def load_all_lyrics(artist, qty_musics):
     token = 'HpJ0pnH7fP-sc9GodGLYDnXKn6lg7StqlYBZGggTCuP6k0ap9Q4-53_Vo88Rw221'
     # Usando biblioteca Genius, verificar possibilidade de criar sua propria lib
     genius = Genius(token, excluded_terms=[
-                    "Remix", "Live", "Acoustic", "Version", "Vevo", "Intro", "Tour", "Speech"], remove_section_headers=True)
-    artist = genius.search_artist(artist, max_songs=qty_musics, sort="title")
+                    "Remix", "Live", "Acoustic", "Version", "Vevo", "Intro", "Tour", "Speech", "Mix", "Demo", "Unreleased"], remove_section_headers=True)
+    artist = genius.search_artist(artist, max_songs=qty_musics)
     print(artist.songs)
+
+    # Busque os álbuns do artista
+    albums = artist.search_albums()
+
+
+    # Busque todas as músicas do artista
+    musicas = artist.songs
+
+    # Filtrar apenas as músicas de versões padrão de álbuns de estúdio
+    musicas_filtradas = []
+    for musica in musicas:
+        if musica.album is not None and musica.album.is_standard and musica.album.album_type == 'Album':
+            musicas_filtradas.append(musica)
+
 
     all_lyrics = []
 
@@ -194,7 +209,7 @@ def plot_graph_laplacian_spectrum(graph, folder_path, artist, context):
     # Plot dos autovalores
     plt.plot(eigenvalues)
     plt.title('Espectro da matriz laplaciana do grafo')
-    plt.suptitle(f'Artista: {artist}\nContexto: {context}')
+    plt.suptitle(f'Artista: {artist} | Contexto: {context}')
     plt.xlabel('Índice')
     plt.ylabel('Autovalor')
     plt.savefig(os.path.join(folder_path, 'spectrum.png'))
@@ -219,14 +234,14 @@ def export_cliques_report(cliques, folder_path, artist, context):
     plt.xlabel('Dimensão')
     plt.ylabel('Frequência')
     plt.title('Histograma das Dimensões das Cliques')
-    plt.suptitle(f'Artista: {artist}\nContexto: {context}')
+    plt.suptitle(f'Artista: {artist} | Contexto: {context}')
     plt.grid(True)
     plt.savefig(os.path.join(folder_path, f'histograma_cliques.png'))  # Salvar o histograma como uma imagem
     plt.close()  # Fechar o plot do histograma
 
 def execute(artist, all_lyrics, context):
     graph = load_correlation_graph(all_lyrics, context)
-    #plot_graph_laplacian_spectrum(graph)
+
     artist_name_folder = artist.lower().replace(" ", "_")
     folder_path = f"reports/{artist_name_folder}/context{context}"
     os.makedirs(folder_path, exist_ok=True)
@@ -249,51 +264,84 @@ def execute(artist, all_lyrics, context):
     #Imprimir resultados
     #show_louvain_partition_report(partition)
 
-def export_geral_histograma_reports(artist):
-    # Criação de uma lista para armazenar as imagens
-    images = []
+def delete_folder(artist):
+    
     artist_name_folder = artist.lower().replace(" ", "_")
-    # Percorrer cada pasta de artista
-    for artist_folder in os.listdir('.'):
-        if os.path.isdir(artist_folder):
-            # Verificar se o nome da pasta do artista é válido
-            artist_name_folder = os.path.join(artist_folder, f"context{artist_folder[-1]}")
-            if not os.path.isdir(artist_name_folder):
-                continue
-            
-            # Percorrer cada pasta de contexto
-            for context_folder in os.listdir(artist_name_folder):
-                context_path = os.path.join(artist_name_folder, context_folder)
-                image_path = os.path.join(context_path, 'histograma_cliques.png')
+    folder_path = f'reports/{artist_name_folder}'
+    if os.path.exists(folder_path) and os.path.isdir(folder_path):
+        shutil.rmtree(folder_path)
 
-                # Verificar se o arquivo existe
-                if os.path.isfile(image_path):
-                    # Abrir a imagem usando a biblioteca Pillow
-                    image = Image.open(image_path)
-                    images.append(image)
+def export_geral_histograma_reports(artist, context):
+    images = []  # Lista para armazenar as imagens a serem combinadas
 
-    # Criar uma imagem única com todas as imagens
-    widths, heights = zip(*(i.size for i in images))
-    total_width = sum(widths)
-    max_height = max(heights)
+    artist_name_folder = artist.lower().replace(" ", "_")
+    # Itera sobre as subpastas e encontra o arquivo histograma_cliques.png em cada uma
+    for i in range(1, context + 1):
+        image_path = os.path.join('reports', f'{artist_name_folder}', f'context{i}', f'histograma_cliques.png')
+        if os.path.exists(image_path):
+            image = Image.open(image_path)
+            images.append(image)
 
-    new_image = Image.new('RGB', (total_width, max_height))
+    # Calcula o número de linhas e colunas
+    num_histograms = len(images)
+    num_columns = 2
+    num_lines = (num_histograms + 1) // num_columns
 
-    x_offset = 0
-    for image in images:
-        new_image.paste(image, (x_offset, 0))
-        x_offset += image.width
+    # Calcula a altura da imagem final
+    image_width, image_height = images[0].size
+    final_image_height = num_lines * image_height
 
-    # Salvar a imagem única
-    new_image.save('geral_histogramas_report.png')
+    # Cria uma nova imagem em branco com as dimensões adequadas
+    final_image = Image.new('RGB', (num_columns * images[0].width, final_image_height), color='white')
 
-# def export_geral_spectrum_reports():
 
-context = 8
-qty_musics = 30
-artists = ['Aurora', 'Taylor Swift', 'Demi Lovato', 'Sia', 'Paramore']
+    # Combina as imagens na imagem final
+    for i, image in enumerate(images):
+        x = (i % num_columns) * image_width
+        y = (i // num_columns) * image_height
+        final_image.paste(image, (x, y))
+
+        # Salva a imagem final
+        final_image.save(os.path.join('reports', f'{artist_name_folder}', f'report_histogram.png'))
+
+def export_geral_spectrum_reports(artist, context):
+    images = []  # Lista para armazenar as imagens a serem combinadas
+
+    artist_name_folder = artist.lower().replace(" ", "_")
+    # Itera sobre as subpastas e encontra o arquivo histograma_cliques.png em cada uma
+    for i in range(1, context + 1):
+        image_path = os.path.join('reports', f'{artist_name_folder}', f'context{i}', f'spectrum.png')
+        if os.path.exists(image_path):
+            image = Image.open(image_path)
+            images.append(image)
+
+    # Calcula o número de linhas e colunas
+    num_spectrums = len(images)
+    num_columns = 2
+    num_lines = (num_spectrums + 1) // num_columns
+
+    # Calcula a altura da imagem final
+    image_width, image_height = images[0].size
+    final_image_height = num_lines * image_height
+
+    # Cria uma nova imagem em branco com as dimensões adequadas
+    final_image = Image.new('RGB', (num_columns * images[0].width, final_image_height), color='white')
+
+    # Combina as imagens na imagem final
+    for i, image in enumerate(images):
+        x = (i % num_columns) * image_width
+        y = (i // num_columns) * image_height
+        final_image.paste(image, (x, y))
+
+        # Salva a imagem final
+        final_image.save(os.path.join('reports', f'{artist_name_folder}', f'report_spectrum.png'))
+
+context = 10
+qty_musics = 20
+artists = ['Sia']
 
 for artist in artists:
+    delete_folder(artist)
     print(f'Analisando {artist}...')
     all_lyrics = []
     all_lyrics = load_all_lyrics(artist, qty_musics)
@@ -303,4 +351,6 @@ for artist in artists:
     for i in range(1, context + 1):
         print(f'Coletando dados para o contexto {i}...')
         execute(artist, all_lyrics, i)
-        export_geral_histograma_reports(artist)
+    
+    export_geral_histograma_reports(artist, context)
+    export_geral_spectrum_reports(artist, context)
