@@ -1,6 +1,6 @@
 import networkx as nx
 import matplotlib.pyplot as plt
-from lyricsgenius import Genius
+
 import string
 import nltk
 from nltk.corpus import stopwords
@@ -13,98 +13,6 @@ import pandas as pd
 import os
 from PIL import Image
 import shutil
-
-
-def load_correlation_graph(words):
-    graph = nx.Graph()
-
-    # Percorre todas as palavras
-    for i in range(len(words)):
-        word = words[i]
-
-        # Adicione o nó ao grafo se ainda não existir
-        if word not in graph:
-            graph.add_node(word)
-
-        # Verifique as palavras vizinhas dentro de um contexto definido
-        context = 3  # Quantas palavras antes e depois considerar como vizinhas
-        neighbors = words[max(0, i - context):i] + words[i+1:i+context+1]
-
-        # Adicione as arestas entre a palavra atual e suas palavras vizinhas
-        for neighbor in neighbors:
-            if neighbor not in graph:
-                graph.add_node(neighbor)
-            graph.add_edge(word, neighbor)
-
-    return graph
-
-def load_correlation_graph(words, context):
-    graph = nx.Graph()
-
-    # Percorre todas as palavras
-    for i in range(len(words)):
-        word = words[i]
-
-        # Adicione o nó ao grafo se ainda não existir
-        if word not in graph:
-            graph.add_node(word)
-
-        # Verifique as palavras vizinhas dentro de um contexto definido
-        neighbors = words[max(0, i - context):i] + words[i+1:i+context+1]
-
-        # Adicione as arestas entre a palavra atual e suas palavras vizinhas
-        for neighbor in neighbors:
-            if neighbor not in graph:
-                graph.add_node(neighbor)
-            graph.add_edge(word, neighbor)
-
-    return graph
-
-
-def show_louvain_partition_report(partition):
-    # Criar uma lista para armazenar os nós em cada setor
-    setor_nodes = [[] for _ in range(max(partition.values()) + 1)]
-
-    # Agrupar os nós em cada setor com base na partição
-    for node, setor in partition.items():
-        setor_nodes[setor].append(node)
-
-    # Exibir os nós em cada setor
-    for setor, nodes in enumerate(setor_nodes):
-        print(f"Setor {setor+1}: {nodes}")
-
-
-def load_all_lyrics(artist, qty_musics):
-    # Acesso a API do Genius
-    token = 'HpJ0pnH7fP-sc9GodGLYDnXKn6lg7StqlYBZGggTCuP6k0ap9Q4-53_Vo88Rw221'
-    # Usando biblioteca Genius, verificar possibilidade de criar sua propria lib
-    genius = Genius(token, excluded_terms=[
-                    "Remix", "Live", "Acoustic", "Version", "Vevo", "Intro", "Tour", "Speech", "Mix", "Demo", "Unreleased"], remove_section_headers=True)
-    artist = genius.search_artist(artist, max_songs=qty_musics)
-    print(artist.songs)
-
-    # Busque os álbuns do artista
-    albums = artist.search_albums()
-
-
-    # Busque todas as músicas do artista
-    musicas = artist.songs
-
-    # Filtrar apenas as músicas de versões padrão de álbuns de estúdio
-    musicas_filtradas = []
-    for musica in musicas:
-        if musica.album is not None and musica.album.is_standard and musica.album.album_type == 'Album':
-            musicas_filtradas.append(musica)
-
-
-    all_lyrics = []
-
-    for song in artist.songs:
-        lyrics = song.lyrics
-        all_lyrics.extend(lyrics.split())
-
-    return all_lyrics
-
 
 # Técnicas de NLP
 def convert_to_lower_case(words):
@@ -140,6 +48,27 @@ def execute_lemmatization(words):
 
     return all_lyrics_lemmatized
 
+def load_correlation_graph(words, context):
+    graph = nx.Graph()
+
+    # Percorre todas as palavras
+    for i in range(len(words)):
+        word = words[i]
+
+        # Adicione o nó ao grafo se ainda não existir
+        if word not in graph:
+            graph.add_node(word)
+
+        # Verifique as palavras vizinhas dentro de um contexto definido
+        neighbors = words[max(0, i - context):i] + words[i+1:i+context+1]
+
+        # Adicione as arestas entre a palavra atual e suas palavras vizinhas
+        for neighbor in neighbors:
+            if neighbor not in graph:
+                graph.add_node(neighbor)
+            graph.add_edge(word, neighbor)
+
+    return graph
 
 def show_cliques_report(cliques):
     # Contar o número de cliques de cada dimensão
@@ -157,19 +86,6 @@ def show_cliques_report(cliques):
     # Emitir o relatório no terminal
     for size, count in sorted_cliques:
         print(f"Foram encontradas {count} cliques de dimensão K{size}")
-
-
-def load_color_map(clique_graph, partition):
-    # Criar uma lista de cores
-    colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'w', 'orange', 'purple',
-          'brown', 'pink', 'gray', 'olive', 'navy', 'teal', 'salmon',
-          'indigo', 'gold', 'lime']
-
-    # Criar um dicionário de cores para os clusters
-    color_map = {node: colors[partition[node]]
-                 for node in clique_graph.nodes()}
-
-    return color_map
 
 
 def apply_nlp_methods(all_lyrics):
@@ -242,8 +158,7 @@ def export_cliques_report(cliques, folder_path, artist, context):
 def execute(artist, all_lyrics, context):
     graph = load_correlation_graph(all_lyrics, context)
 
-    artist_name_folder = artist.lower().replace(" ", "_")
-    folder_path = f"reports/{artist_name_folder}/context{context}"
+    folder_path = f"reports/{artist}/context{context}"
     os.makedirs(folder_path, exist_ok=True)
 
     # Visualização do grafo
@@ -266,18 +181,16 @@ def execute(artist, all_lyrics, context):
 
 def delete_folder(artist):
     
-    artist_name_folder = artist.lower().replace(" ", "_")
-    folder_path = f'reports/{artist_name_folder}'
+    folder_path = f'reports/{artist}'
     if os.path.exists(folder_path) and os.path.isdir(folder_path):
         shutil.rmtree(folder_path)
 
 def export_geral_histograma_reports(artist, context):
     images = []  # Lista para armazenar as imagens a serem combinadas
 
-    artist_name_folder = artist.lower().replace(" ", "_")
     # Itera sobre as subpastas e encontra o arquivo histograma_cliques.png em cada uma
     for i in range(1, context + 1):
-        image_path = os.path.join('reports', f'{artist_name_folder}', f'context{i}', f'histograma_cliques.png')
+        image_path = os.path.join('reports', f'{artist}', f'context{i}', f'histograma_cliques.png')
         if os.path.exists(image_path):
             image = Image.open(image_path)
             images.append(image)
@@ -302,15 +215,14 @@ def export_geral_histograma_reports(artist, context):
         final_image.paste(image, (x, y))
 
         # Salva a imagem final
-        final_image.save(os.path.join('reports', f'{artist_name_folder}', f'report_histogram.png'))
+        final_image.save(os.path.join('reports', f'{artist}', f'report_histogram.png'))
 
 def export_geral_spectrum_reports(artist, context):
     images = []  # Lista para armazenar as imagens a serem combinadas
 
-    artist_name_folder = artist.lower().replace(" ", "_")
     # Itera sobre as subpastas e encontra o arquivo histograma_cliques.png em cada uma
     for i in range(1, context + 1):
-        image_path = os.path.join('reports', f'{artist_name_folder}', f'context{i}', f'spectrum.png')
+        image_path = os.path.join('reports', f'{artist}', f'context{i}', f'spectrum.png')
         if os.path.exists(image_path):
             image = Image.open(image_path)
             images.append(image)
@@ -334,23 +246,31 @@ def export_geral_spectrum_reports(artist, context):
         final_image.paste(image, (x, y))
 
         # Salva a imagem final
-        final_image.save(os.path.join('reports', f'{artist_name_folder}', f'report_spectrum.png'))
+        final_image.save(os.path.join('reports', f'{artist}', f'report_spectrum.png'))
 
 context = 10
-qty_musics = 20
-artists = ['Sia']
+folder = "artists_data"
+artists = []
+
+for file in os.listdir(folder):
+    if file.endswith(".txt"):
+        artist_name = file.split(".txt")[0]
+        file_path = os.path.join(folder, file)
+        with open(file_path, "r", encoding='utf-8') as artist_file:
+            lines = artist_file.read().splitlines()
+            artist_data = {"name": artist_name, "lyrics": lines}
+            artists.append(artist_data)
 
 for artist in artists:
-    delete_folder(artist)
-    print(f'Analisando {artist}...')
-    all_lyrics = []
-    all_lyrics = load_all_lyrics(artist, qty_musics)
+    delete_folder(artist['name'])
+    name = artist['name']
+    print(f'Analisando {name}...')
     # Aplicar algumas técnicas usadas em NLP
-    all_lyrics = apply_nlp_methods(all_lyrics)
+    all_lyrics = apply_nlp_methods(artist['lyrics'])
     
     for i in range(1, context + 1):
         print(f'Coletando dados para o contexto {i}...')
-        execute(artist, all_lyrics, i)
+        execute(artist['name'], all_lyrics, i)
     
-    export_geral_histograma_reports(artist, context)
-    export_geral_spectrum_reports(artist, context)
+    export_geral_histograma_reports(artist['name'], context)
+    export_geral_spectrum_reports(artist['name'], context)
