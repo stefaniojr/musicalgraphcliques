@@ -39,8 +39,8 @@ def export_lyrics_to_txt(artist, all_lyrics):
 
 
 # Exemplo de uso
-artists = ['Demi Lovato']
-qty_musics = 25
+artists = ['Adele']
+qty_musics = 50
 
 for artist in artists:
     all_lyrics = load_all_lyrics([artist], qty_musics)
